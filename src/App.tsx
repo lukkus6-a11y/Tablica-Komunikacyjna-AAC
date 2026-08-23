@@ -3,30 +3,21 @@ import { supabase } from './supabase';
 
 export function App() {
   const [session, setSession] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Bezpieczne pobranie sesji z obsługą błędów (ignoruje brak zalogowania / status 401)
-    supabase.auth
-      .getSession()
-      .then(({ data: { session }, error }) => {
-        if (!error) {
-          setSession(session);
-        }
-      })
-      .catch(() => {
-        // Ignorujemy błędy braku autoryzacji dla niezalogowanego użytkownika
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-
-    // Nasłuchiwanie zmian stanu logowania w czasie rzeczywistym
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    // 1. Sprawdzamy sesję przy starcie
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setLoading(false);
+    }).catch(() => {});
+
+    // 2. Obsługujemy powrót z Google (wykrycie tokenu w adresie URL)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      
+      // Jeśli token został przechwycony, czścimy brzydki hash z paska adresu
+      if (window.location.hash && window.location.hash.includes('access_token')) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -35,6 +26,9 @@ export function App() {
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
+      options: {
+        redirectTo: window.location.origin // powrót na główny adres aplikacji
+      }
     });
   };
 
@@ -42,34 +36,32 @@ export function App() {
     await supabase.auth.signOut();
   };
 
-  if (loading) {
-    return <div style={{ padding: '20px', textAlign: 'center' }}>Ładowanie...</div>;
-  }
-
   return (
-    <div style={{ padding: '40px', fontFamily: 'sans-serif', textAlign: 'center' }}>
-      <h1>Tablica Komunikacyjna AAC</h1>
-      {session ? (
+    <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
+      {/* Pasek górny z panelem logowania/wylogowania */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ccc', paddingBottom: '10px', marginBottom: '20px' }}>
+        <h2>Tablica Komunikacyjna AAC</h2>
         <div>
-          <p>Zalogowano jako: <strong>{session.user.email}</strong></p>
-          <button 
-            onClick={handleLogout}
-            style={{ padding: '10px 20px', cursor: 'pointer', background: '#ff4d4d', color: '#fff', border: 'none', borderRadius: '5px' }}
-          >
-            Wyloguj się
-          </button>
+          {session ? (
+            <div>
+              <span style={{ marginRight: '15px' }}>Zalogowany: <strong>{session.user.email}</strong></span>
+              <button onClick={handleLogout} style={{ padding: '6px 12px', cursor: 'pointer', background: '#ff4d4d', color: '#fff', border: 'none', borderRadius: '4px' }}>
+                Wyloguj
+              </button>
+            </div>
+          ) : (
+            <button onClick={handleGoogleLogin} style={{ padding: '6px 12px', cursor: 'pointer', background: '#4285F4', color: '#fff', border: 'none', borderRadius: '4px' }}>
+              Zaloguj przez Google
+            </button>
+          )}
         </div>
-      ) : (
-        <div>
-          <p>Nie jesteś zalogowany.</p>
-          <button 
-            onClick={handleGoogleLogin}
-            style={{ padding: '10px 20px', cursor: 'pointer', background: '#4285F4', color: '#fff', border: 'none', borderRadius: '5px', fontSize: '16px' }}
-          >
-            Zaloguj przez Google
-          </button>
-        </div>
-      )}
+      </div>
+
+      {/* GŁÓWNA ZAWARTOŚĆ APLIKACJI - dostępna od razu dla gościa */}
+      <div>
+        <p>Aplikacja działa w trybie otwartym. Możesz korzystać z tablicy komunikacyjnej bez logowania.</p>
+        {/* Tutaj znajduje się właściwa treść Twojej tablice AAC */}
+      </div>
     </div>
   );
 }
