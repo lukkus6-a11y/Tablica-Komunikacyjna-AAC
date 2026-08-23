@@ -25,8 +25,10 @@ export default function App() {
   const [boardId, setBoardId] = useState<string | null>(null);
   const [isSavingBoard, setIsSavingBoard] = useState(false);
 
-  // Fetch board layout from Supabase
+  // Fetch board layout from Supabase (zabezpieczone przed wysłaniem zapytania bez ID)
   const loadUserBoard = useCallback(async (userId: string) => {
+    if (!userId) return; // Zapobiega wysyłaniu zapytań o tablice dla niezalogowanych gości
+    
     try {
       const { data, error } = await supabase
         .from('boards')
@@ -52,11 +54,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // 1. Jawne sprawdzenie tokenów w URL po powrocie z Google (implicit flow)
+    // 1. Jawne sprawdzenie tokenów w URL po powrocie z Google
     const hash = window.location.hash;
     if (hash && hash.includes('access_token')) {
       supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
+        if (session?.user) {
           setUser(session.user);
           loadUserBoard(session.user.id);
           window.history.replaceState(null, '', window.location.pathname);
@@ -64,11 +66,11 @@ export default function App() {
       });
     }
 
-    // 2. Standardowe pobranie sesji (zabezpieczone przed błędem 401 dla gościa)
+    // 2. Standardowe pobranie sesji
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      if (currentUser) {
+      if (currentUser?.id) {
         loadUserBoard(currentUser.id);
       }
     }).catch(() => {});
@@ -77,7 +79,7 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      if (currentUser) {
+      if (currentUser?.id) {
         loadUserBoard(currentUser.id);
       }
     });
@@ -90,7 +92,7 @@ export default function App() {
       provider: 'google',
       options: {
         redirectTo: window.location.origin,
-        flowType: 'implicit', // Wyłączenie PKCE na rzecz bezpośredniego przekierowania tokenu
+        flowType: 'implicit',
       },
     });
   };
@@ -112,7 +114,7 @@ export default function App() {
     setCoreItems(newCoreItems);
     localStorage.setItem('aac_core_vocabulary', JSON.stringify(newCoreItems));
 
-    if (user) {
+    if (user?.id) {
       setIsSavingBoard(true);
       try {
         if (boardId) {
