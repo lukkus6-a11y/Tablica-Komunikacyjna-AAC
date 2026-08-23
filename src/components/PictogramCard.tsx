@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Pictogram } from '../types';
 import { FITZGERALD_CONFIG, getArasacImageUrl, getArasacFallbackImageUrl, getArasacApiImageUrl } from '../utils/fitzgeraldKey';
 import { speakText } from '../utils/speech';
-import { Plus } from 'lucide-react';
+import { Plus, GripVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface PictogramCardProps {
   pictogram: Pictogram;
@@ -10,6 +10,14 @@ interface PictogramCardProps {
   highContrast?: boolean;
   size?: 'sm' | 'md' | 'lg';
   showCategoryBadge?: boolean;
+  isReordering?: boolean;
+  onLongPress?: () => void;
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
+  onMoveLeft?: () => void;
+  onMoveRight?: () => void;
 }
 
 export const PictogramCard: React.FC<PictogramCardProps> = ({
@@ -18,10 +26,42 @@ export const PictogramCard: React.FC<PictogramCardProps> = ({
   highContrast = false,
   size = 'md',
   showCategoryBadge = false,
+  isReordering = false,
+  onLongPress,
+  draggable = false,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onMoveLeft,
+  onMoveRight,
 }) => {
   const [fallbackIndex, setFallbackIndex] = useState(0);
   const [imageFailed, setImageFailed] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+
+  // Long press detection ref
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const isLongPressRef = useRef(false);
+
+  const startPress = () => {
+    isLongPressRef.current = false;
+    if (onLongPress) {
+      timerRef.current = setTimeout(() => {
+        isLongPressRef.current = true;
+        if (navigator.vibrate) {
+          try { navigator.vibrate(50); } catch (e) {}
+        }
+        onLongPress();
+      }, 500);
+    }
+  };
+
+  const cancelPress = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  };
 
   const config = FITZGERALD_CONFIG[pictogram.category] || FITZGERALD_CONFIG.noun;
 
@@ -51,7 +91,16 @@ export const PictogramCard: React.FC<PictogramCardProps> = ({
     }
   };
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
+    if (isLongPressRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (isReordering) {
+      // In reorder mode, click does not add to sentence
+      return;
+    }
     speakText(pictogram.word);
     onClick(pictogram);
   };
@@ -70,10 +119,20 @@ export const PictogramCard: React.FC<PictogramCardProps> = ({
   };
 
   return (
-    <button
-      type="button"
+    <div
+      draggable={draggable || isReordering}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onMouseDown={startPress}
+      onMouseUp={cancelPress}
+      onMouseLeave={cancelPress}
+      onTouchStart={startPress}
+      onTouchEnd={cancelPress}
       onClick={handleClick}
-      aria-label={`Dodaj piktogram: ${pictogram.word}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`Piktogram: ${pictogram.word}${isReordering ? ' (Tryb przesuwania)' : ''}`}
       className={`
         relative group flex flex-col items-center justify-between rounded-xl transition-all duration-150 cursor-pointer select-none
         focus:outline-none focus:ring-4 focus:ring-amber-500 focus:ring-offset-2
@@ -84,10 +143,11 @@ export const PictogramCard: React.FC<PictogramCardProps> = ({
             ? config.highContrastBg
             : `${config.bgClass} border-2 ${config.borderClass}`
         }
+        ${isReordering ? 'ring-4 ring-blue-500 ring-offset-2 animate-pulse scale-[1.02] cursor-grab active:cursor-grabbing' : ''}
       `}
     >
       {/* Category Badge if enabled */}
-      {showCategoryBadge && !highContrast && (
+      {showCategoryBadge && !highContrast && !isReordering && (
         <span
           className={`absolute top-1 left-1 px-1.5 py-0.5 text-[10px] font-bold rounded-md ${config.badgeBgClass}`}
         >
@@ -95,8 +155,41 @@ export const PictogramCard: React.FC<PictogramCardProps> = ({
         </span>
       )}
 
+      {/* Reorder Grip Handle when in reorder mode */}
+      {isReordering && (
+        <div className="absolute top-1 left-1 bg-blue-600 text-white rounded-md p-0.5 shadow flex items-center justify-center">
+          <GripVertical className="w-3.5 h-3.5" />
+        </div>
+      )}
+
+      {/* Reorder Move Buttons (Left / Right) */}
+      {isReordering && (
+        <div className="absolute top-1 right-1 flex items-center gap-0.5 z-10">
+          {onMoveLeft && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onMoveLeft(); }}
+              title="Przesuń w lewo"
+              className="p-1 bg-slate-900/80 hover:bg-slate-900 text-white rounded-md shadow transition"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {onMoveRight && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onMoveRight(); }}
+              title="Przesuń w prawo"
+              className="p-1 bg-slate-900/80 hover:bg-slate-900 text-white rounded-md shadow transition"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Pictogram Image Container */}
-      <div className="flex-1 flex items-center justify-center w-full my-0.5 relative overflow-hidden">
+      <div className="flex-1 flex items-center justify-center w-full my-0.5 relative overflow-hidden pointer-events-none">
         {!isLoaded && !imageFailed && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-200/50 rounded-lg animate-pulse">
             <span className="sr-only">Ładowanie...</span>
@@ -129,7 +222,7 @@ export const PictogramCard: React.FC<PictogramCardProps> = ({
       </div>
 
       {/* Polish Text Label */}
-      <div className="w-full text-center px-1">
+      <div className="w-full text-center px-1 pointer-events-none">
         <span
           className={`
             block truncate capitalize font-bold leading-tight tracking-wide
@@ -140,10 +233,12 @@ export const PictogramCard: React.FC<PictogramCardProps> = ({
         </span>
       </div>
 
-      {/* Quick plus indicator on hover */}
-      <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-amber-500 text-white rounded-full p-0.5 shadow-sm">
-        <Plus className="w-3 h-3" />
-      </div>
-    </button>
+      {/* Quick plus indicator on hover (hidden during reorder) */}
+      {!isReordering && (
+        <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-amber-500 text-white rounded-full p-0.5 shadow-sm">
+          <Plus className="w-3 h-3" />
+        </div>
+      )}
+    </div>
   );
 };
