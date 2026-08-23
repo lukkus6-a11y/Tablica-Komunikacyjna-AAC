@@ -9,10 +9,8 @@ import { FullScreenSentenceModal } from './components/FullScreenSentenceModal';
 import { AacToolbar } from './components/AacToolbar';
 
 export default function App() {
-  // Stan uwierzytelniania użytkownika
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState(null);
 
-  // Core Vocabulary order state
   const [coreItems, setCoreItems] = useState<Pictogram[]>(() => {
     const saved = localStorage.getItem('aac_core_vocabulary');
     if (saved) {
@@ -21,14 +19,11 @@ export default function App() {
     return CORE_VOCABULARY;
   });
 
-  // Supabase board record ID
   const [boardId, setBoardId] = useState<string | null>(null);
   const [isSavingBoard, setIsSavingBoard] = useState(false);
 
-  // Fetch board layout from Supabase (zabezpieczone przed wysłaniem zapytania bez ID)
   const loadUserBoard = useCallback(async (userId: string) => {
-    if (!userId) return; // Zapobiega wysyłaniu zapytań o tablice dla niezalogowanych gości
-    
+    if (!userId) return;
     try {
       const { data, error } = await supabase
         .from('boards')
@@ -54,41 +49,18 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // 1. Jawne wyłapanie tokenu z hasha w URL po powrocie z Google
-    const hash = window.location.hash;
-    if (hash && hash.includes('access_token')) {
-      const params = new URLSearchParams(hash.replace('#', '?'));
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
-
-      if (accessToken) {
-        supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken || '',
-        }).then(async ({ data: { session }, error }) => {
-          if (!error && session?.user) {
-            setUser(session.user);
-            await loadUserBoard(session.user.id);
-            // Wyczyść pasek adresu z poufnego tokenu
-            window.history.replaceState(null, '', window.location.pathname);
-          } else {
-            console.error('Błąd jawnego ustawiania sesji:', error);
-          }
-        });
-        return;
-      }
-    }
-
-    // 2. Standardowe pobranie sesji, jeśli użytkownik już był zalogowany
+    // Automatyczna obsługa sesji przez klienta Supabase z włączonym detectSessionInUrl
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       if (currentUser?.id) {
         loadUserBoard(currentUser.id);
+        if (window.location.hash.includes('access_token')) {
+          window.history.replaceState(null, '', window.location.pathname);
+        }
       }
-    }).catch(() => {});
+    });
 
-    // 3. Nasłuchiwanie zmian stanu
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
@@ -121,7 +93,6 @@ export default function App() {
     }
   };
 
-  // Reorder Core Vocabulary & save to Supabase / localStorage
   const handleReorderCore = async (newCoreItems: Pictogram[]) => {
     setCoreItems(newCoreItems);
     localStorage.setItem('aac_core_vocabulary', JSON.stringify(newCoreItems));
@@ -161,52 +132,38 @@ export default function App() {
     }
   };
 
-  // Reset Core Vocabulary order to default
   const handleResetCore = async () => {
     await handleReorderCore(CORE_VOCABULARY);
     localStorage.removeItem('aac_core_vocabulary');
   };
 
-  // Composed sentence pictograms state
   const [sentence, setSentence] = useState<Pictogram[]>([]);
-
-  // High contrast accessibility mode
   const [highContrast, setHighContrast] = useState(false);
-
-  // Fullscreen presentation modal visibility
   const [isFullScreenOpen, setIsFullScreenOpen] = useState(false);
-
-  // Mobile active view tab ('all' | 'core' | 'context')
   const [mobileActiveView, setMobileActiveView] = useState<'all' | 'core' | 'context'>('all');
 
-  // Handle adding a pictogram tile to the sentence bar
   const handleSelectPictogram = (pictogram: Pictogram) => {
     setSentence((prev) => [...prev, pictogram]);
   };
 
-  // Remove a single item from the sentence bar at index
   const handleRemoveAt = (index: number) => {
     setSentence((prev) => prev.filter((_, idx) => idx !== index));
   };
 
-  // Clear all items in sentence
   const handleClearSentence = () => {
     setSentence([]);
   };
 
-  // Remove last item (Backspace)
   const handleRemoveLast = () => {
     setSentence((prev) => prev.slice(0, -1));
   };
 
-  // Last added pictogram for sequential prediction triggering
   const lastSelected = sentence.length > 0 ? sentence[sentence.length - 1] : undefined;
 
   return (
     <div className={`min-h-screen ${highContrast ? 'bg-black text-yellow-300' : 'bg-slate-100 text-slate-900'} p-2 sm:p-4 lg:p-6 transition-colors duration-200`}>
       <div className="max-w-[1600px] mx-auto flex flex-col lg:h-[calc(100vh-2rem)] gap-3">
         
-        {/* Pasek logowania i przyciski accessibility */}
         <div className="flex items-center justify-between bg-white/80 dark:bg-slate-800/80 backdrop-blur p-2 px-4 rounded-xl shadow-sm border border-slate-200/60 dark:border-slate-700">
           <AacToolbar
             highContrast={highContrast}
@@ -235,7 +192,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Top Section - Sentence Bar (Pasek Wypowiedzi) */}
         <SentenceBar
           sentence={sentence}
           onRemoveAt={handleRemoveAt}
@@ -245,15 +201,12 @@ export default function App() {
           highContrast={highContrast}
         />
 
-        {/* Mobile View Switcher */}
         <div className="flex lg:hidden items-center justify-center p-1 bg-slate-200/80 rounded-xl gap-1">
           <button
             type="button"
             onClick={() => setMobileActiveView('all')}
             className={`flex-1 py-1.5 px-2 text-xs font-bold rounded-lg transition-all ${
-              mobileActiveView === 'all'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'text-slate-700 hover:bg-slate-300/60'
+              mobileActiveView === 'all' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-300/60'
             }`}
           >
             Pokaż Oba (Przewijaj)
@@ -262,9 +215,7 @@ export default function App() {
             type="button"
             onClick={() => setMobileActiveView('core')}
             className={`flex-1 py-1.5 px-2 text-xs font-bold rounded-lg transition-all ${
-              mobileActiveView === 'core'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-700 hover:bg-slate-300/60'
+              mobileActiveView === 'core' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-300/60'
             }`}
           >
             Słownictwo Rdzenne
@@ -273,23 +224,15 @@ export default function App() {
             type="button"
             onClick={() => setMobileActiveView('context')}
             className={`flex-1 py-1.5 px-2 text-xs font-bold rounded-lg transition-all ${
-              mobileActiveView === 'context'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'text-slate-700 hover:bg-slate-300/60'
+              mobileActiveView === 'context' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-300/60'
             }`}
           >
             Panel Kontekstowy ✨
           </button>
         </div>
 
-        {/* Main Board Layout */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 min-h-0 lg:overflow-hidden pb-4 lg:pb-0">
-          <div
-            className={`
-              lg:col-span-7 xl:col-span-8 lg:h-full overflow-hidden
-              ${mobileActiveView === 'context' ? 'hidden lg:block' : 'block'}
-            `}
-          >
+          <div className={`lg:col-span-7 xl:col-span-8 lg:h-full overflow-hidden ${mobileActiveView === 'context' ? 'hidden lg:block' : 'block'}`}>
             <CoreGrid
               coreItems={coreItems}
               onReorder={handleReorderCore}
@@ -300,12 +243,7 @@ export default function App() {
             />
           </div>
 
-          <div
-            className={`
-              lg:col-span-5 xl:col-span-4 lg:h-full overflow-hidden
-              ${mobileActiveView === 'core' ? 'hidden lg:block' : 'block'}
-            `}
-          >
+          <div className={`lg:col-span-5 xl:col-span-4 lg:h-full overflow-hidden ${mobileActiveView === 'core' ? 'hidden lg:block' : 'block'}`}>
             <ContextPanel
               onSelectPictogram={handleSelectPictogram}
               lastSelectedPictogram={lastSelected}
@@ -315,7 +253,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Fullscreen Overlay Modal */}
       {isFullScreenOpen && (
         <FullScreenSentenceModal
           sentence={sentence}
