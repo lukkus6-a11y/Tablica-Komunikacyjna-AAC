@@ -241,7 +241,7 @@ export default function App() {
                   onClick={() => setIsRegistering(!isRegistering)}
                   className="text-xs text-blue-600 dark:text-blue-400 hover:underline px-1"
                 >
-                  {isRegistering ? 'Masz konto? Zaloguj się' / : 'Nie masz konta? Załóż'}
+                  {isRegistering ? 'Masz konto? Zaloguj się' : 'Nie masz konta? Załóż'}
                 </button>
               </form>
             )}
