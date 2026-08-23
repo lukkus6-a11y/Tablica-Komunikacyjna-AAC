@@ -7,9 +7,10 @@ import { CoreGrid } from './components/CoreGrid';
 import { ContextPanel } from './components/ContextPanel';
 import { FullScreenSentenceModal } from './components/FullScreenSentenceModal';
 import { AacToolbar } from './components/AacToolbar';
+import { User } from '@supabase/supabase-js';
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<User | null>(null);
   
   // Stany formularza logowania/rejestracji
   const [email, setEmail] = useState('');
@@ -56,7 +57,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Sprawdzenie aktywnej sesji przy starcie (dzięki persistSession: true aplikacja "pamięta" użytkownika)
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
@@ -83,8 +83,7 @@ export default function App() {
     setAuthMessage('');
 
     if (isRegistering) {
-      // Rejestracja nowego użytkownika
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email,
         password,
       });
@@ -96,7 +95,6 @@ export default function App() {
         setIsRegistering(false);
       }
     } else {
-      // Logowanie istniejącego użytkownika
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
