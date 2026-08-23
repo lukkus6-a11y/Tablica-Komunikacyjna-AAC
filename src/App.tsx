@@ -54,30 +54,44 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // 1. Sprawdź sesję przy uruchomieniu (Supabase automatycznie wyłapuje hash z URL, jeśli detectSessionInUrl jest włączone)
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error("Błąd pobierania sesji:", error);
+    // 1. Jawne wyłapanie tokenu z hasha w URL po powrocie z Google
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token')) {
+      const params = new URLSearchParams(hash.replace('#', '?'));
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+
+      if (accessToken) {
+        supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken || '',
+        }).then(async ({ data: { session }, error }) => {
+          if (!error && session?.user) {
+            setUser(session.user);
+            await loadUserBoard(session.user.id);
+            // Wyczyść pasek adresu z poufnego tokenu
+            window.history.replaceState(null, '', window.location.pathname);
+          } else {
+            console.error('Błąd jawnego ustawiania sesji:', error);
+          }
+        });
         return;
       }
-      
+    }
+
+    // 2. Standardowe pobranie sesji, jeśli użytkownik już był zalogowany
+    supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      
       if (currentUser?.id) {
         loadUserBoard(currentUser.id);
-        // Jeśli w URL był token, wyczyść go po pomyślnym zalogowaniu
-        if (window.location.hash.includes('access_token')) {
-          window.history.replaceState(null, '', window.location.pathname);
-        }
       }
-    });
+    }).catch(() => {});
 
-    // 2. Nasłuchuj zmian stanu logowania w czasie rzeczywistym
+    // 3. Nasłuchiwanie zmian stanu
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      
       if (currentUser?.id) {
         await loadUserBoard(currentUser.id);
       }
