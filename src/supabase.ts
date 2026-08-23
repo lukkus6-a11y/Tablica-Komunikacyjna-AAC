@@ -7,6 +7,7 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true, // Kluczowe dla przechwycenia sesji po powrocie z Google
+    detectSessionInUrl: true,
+    flowType: 'implicit',
   },
 });
