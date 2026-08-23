@@ -52,7 +52,19 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Bezpieczne pobranie sesji z obsługą braku logowania (ignoruje błąd 401)
+    // 1. Jawne sprawdzenie tokenów w URL po powrocie z Google (implicit flow)
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token')) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          setUser(session.user);
+          loadUserBoard(session.user.id);
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+      });
+    }
+
+    // 2. Standardowe pobranie sesji (zabezpieczone przed błędem 401 dla gościa)
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
@@ -61,17 +73,12 @@ export default function App() {
       }
     }).catch(() => {});
 
-    // Nasłuchiwanie zmian stanu logowania + czyszczenie hasha z URL po powrocie z Google
+    // 3. Nasłuchiwanie zmian stanu logowania
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       if (currentUser) {
         loadUserBoard(currentUser.id);
-      }
-
-      // Jeśli nastąpił powrót z OAuth i w adresie są tokeny, czyścimy URL
-      if (window.location.hash && window.location.hash.includes('access_token')) {
-        window.history.replaceState(null, '', window.location.pathname);
       }
     });
 
@@ -83,6 +90,7 @@ export default function App() {
       provider: 'google',
       options: {
         redirectTo: window.location.origin,
+        flowType: 'implicit', // Wyłączenie PKCE na rzecz bezpośredniego przekierowania tokenu
       },
     });
   };
