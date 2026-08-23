@@ -54,45 +54,32 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // 1. Jawne przechwycenie tokenu z hasha w URL po powrocie z Google
-    const hash = window.location.hash;
-    if (hash && hash.includes('access_token')) {
-      const params = new URLSearchParams(hash.replace('#', '?'));
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
-
-      if (accessToken && refreshToken) {
-        supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        }).then(({ data: { session }, error }) => {
-          if (!error && session?.user) {
-            setUser(session.user);
-            loadUserBoard(session.user.id);
-            window.history.replaceState(null, '', window.location.pathname);
-          }
-        });
+    // 1. Sprawdź sesję przy uruchomieniu (Supabase automatycznie wyłapuje hash z URL, jeśli detectSessionInUrl jest włączone)
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error("Błąd pobierania sesji:", error);
         return;
       }
-    }
-
-    // 2. Standardowe pobranie sesji
-    supabase.auth.getSession().then(({ data: { session } }) => {
+      
       const currentUser = session?.user ?? null;
       setUser(currentUser);
+      
       if (currentUser?.id) {
         loadUserBoard(currentUser.id);
+        // Jeśli w URL był token, wyczyść go po pomyślnym zalogowaniu
+        if (window.location.hash.includes('access_token')) {
+          window.history.replaceState(null, '', window.location.pathname);
+        }
       }
-    }).catch((err) => {
-      console.error('Session error:', err);
     });
 
-    // 3. Nasłuchiwanie zmian stanu logowania
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // 2. Nasłuchuj zmian stanu logowania w czasie rzeczywistym
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
+      
       if (currentUser?.id) {
-        loadUserBoard(currentUser.id);
+        await loadUserBoard(currentUser.id);
       }
     });
 
