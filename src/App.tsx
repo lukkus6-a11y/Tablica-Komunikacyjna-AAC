@@ -54,7 +54,29 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // 1. Standardowe pobranie sesji (Supabase automatycznie wykryje tokeny/kod z URL)
+    // 1. Jawne przechwycenie tokenu z hasha w URL po powrocie z Google
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token')) {
+      const params = new URLSearchParams(hash.replace('#', '?'));
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+
+      if (accessToken && refreshToken) {
+        supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        }).then(({ data: { session }, error }) => {
+          if (!error && session?.user) {
+            setUser(session.user);
+            loadUserBoard(session.user.id);
+            window.history.replaceState(null, '', window.location.pathname);
+          }
+        });
+        return;
+      }
+    }
+
+    // 2. Standardowe pobranie sesji
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
@@ -65,7 +87,7 @@ export default function App() {
       console.error('Session error:', err);
     });
 
-    // 2. Nasłuchiwanie zmian stanu logowania
+    // 3. Nasłuchiwanie zmian stanu logowania
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
