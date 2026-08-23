@@ -1,12 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://fnneoykgqmsdsjamhxmw.supabase.co';
-const supabaseKey = 'sb_publishable_SOx0_zsb2SSBFrwBHvZrhw_MANaEZAN';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true, // Kluczowe dla automatycznego przechwycenia logowania Google
+    detectSessionInUrl: true,
   },
 });
